@@ -1,2 +1,4 @@
-# pbse-akhtar
-Contract-first OpenAPI specification and mock server for a campus sports and padel court booking system.
+# PBSE Week 2 Akhtar
+Practice system: Campus Sports and Padel Court Booking API
+Interface: spec/openapi.yaml
+Run the mock: cd spec && npm install && npm run mock

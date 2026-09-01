@@ -1,0 +1,35 @@
+# Redocly lint configuration.
+#
+# The default "recommended" ruleset is written for a published, production
+# API. Three of its rules do not yet apply to a Meeting 2 document, and each
+# one is switched off here WITH A DATE ON WHICH IT COMES BACK. Turning a rule
+# off without recording why is how a lint configuration becomes a place where
+# problems go to be forgotten.
+
+extends:
+  - recommended
+
+rules:
+  # Authentication is Chapter 4. There is nothing to declare yet.
+  # >>> DELETE THIS LINE IN MEETING 4. If your spec still has it at
+  # >>> Meeting 7, the partner team's client will not know how to
+  # >>> authenticate and that is a D2 defect against you.
+  security-defined: off
+
+  # Your service is not deployed until Meeting 3, so the only honest
+  # server URLs today are a placeholder and localhost.
+  # >>> Replace the placeholder with your real URL in Meeting 3 and
+  # >>> delete this line.
+  no-server-example.com: off
+
+  # A licence matters for a published API. Not for a course project.
+  info-license: off
+
+  # Everything else stays on, including:
+  #   no-invalid-media-type-examples — your examples must actually
+  #     validate against your own schemas. This is the rule that catches
+  #     a specification quietly drifting away from its examples, which is
+  #     the single most common Meeting 7 complaint.
+  #   operation-4xx-response — every operation documents at least one
+  #     failure. Happy-paths-only is a 25% criterion in A1.
+  #   operation-operationId, operation-summary, no-ambiguous-paths.
