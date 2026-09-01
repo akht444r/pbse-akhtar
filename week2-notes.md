@@ -46,10 +46,10 @@
      4. Key reuse with different payload: Returns `409 Conflict` with Problem type `.../problems/idempotency-key-reuse`.
 
 5. One Thing Unsure About:
-   - How should the server reconcile race conditions when two different clients submit different idempotency keys simultaneously for the exact same physical court slot before either transaction finishes writing?
+   - How should the server reconcile race conditions when two different clients submit different idempotency keys for the exact same physical court slot before either transaction finishes writing?
 
 ---
 
 ## Where I Stand
 - Self-Mark: **PASS**
-- Justification: All five lab conditions are met—the specification lints clean with zero errors, example payloads are defined across all schemas, the missing-header 422 refusal screenshot is recorded in `evidence/`, the idempotency ticket contract is documented, and no backend service code was written prior to the specification contract.
+- Justification: All five lab conditions are met, the specification lints clean with zero errors, example payloads are defined across all schemas, the missing-header 422 refusal screenshot is documented in `evidence/`, the idempotency ticket contract is documented, and no backend service code was written before to the specification contract.
