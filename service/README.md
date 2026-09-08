@@ -1,8 +1,8 @@
 # Campus Court Booking Service
 
 ## Deployment
-- **Live Service URL:** `https://<YOUR-RENDER-SERVICE-NAME>.onrender.com`
-- **Health Check:** `https://<YOUR-RENDER-SERVICE-NAME>.onrender.com/health`
+- **Live Service URL:** `https://court-bookings-pbse.onrender.com`
+- **Health Check:** `https://court-bookings-pbse.onrender.com/health`
 
 ---
 
