@@ -7,17 +7,20 @@ import { toCourtRepresentation } from '../representations/court.js';
 
 export const courtsRouter = express.Router();
 
-// Collection endpoint: /courts
 courtsRouter
   .route('/')
   .get(async (req, res) => {
-    // 2 · validate
-    // Reject unknown query parameters to enforce contract additionalProperties: false
-    const allowedQueryParams = ['isAvailable'];
-    const extraParams = Object.keys(req.query).filter((key) => !allowedQueryParams.includes(key));
-    if (extraParams.length > 0) {
+    // 2 · validate query parameters strictly
+    const queryKeys = Object.keys(req.query);
+    const hasInvalidKeys = queryKeys.some((key) => key !== 'isAvailable');
+    const invalidVal =
+      req.query.isAvailable !== undefined &&
+      req.query.isAvailable !== 'true' &&
+      req.query.isAvailable !== 'false';
+
+    if (hasInvalidKeys || invalidVal) {
       return problem(res, 400, 'invalid-query-parameter', {
-        detail: `Unknown query parameter(s): ${extraParams.join(', ')}.`,
+        detail: 'Only boolean query parameter "isAvailable" (true/false) is allowed.',
       });
     }
 
@@ -39,7 +42,6 @@ courtsRouter
     });
   });
 
-// Single entity endpoint: /courts/:courtId
 courtsRouter
   .route('/:courtId')
   .get(async (req, res) => {
