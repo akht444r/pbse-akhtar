@@ -1,0 +1,65 @@
+name: API Contract Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  contract-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: court_booking
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install service dependencies
+        working-directory: service
+        run: npm ci
+
+      - name: Install Schemathesis
+        run: pip install schemathesis
+
+      - name: Set up database schema
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d court_booking -f service/db/schema.sql
+          psql -h localhost -U postgres -d court_booking -f service/db/seed.sql
+
+      - name: Start API
+        working-directory: service
+        env:
+          PORT: 3000
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/court_booking
+          LOG_LEVEL: debug
+        run: |
+          npm start &
+          sleep 5
+
+      - name: Run Schemathesis
+        run: schemathesis run spec/openapi.yaml --url http://localhost:3000/v1
