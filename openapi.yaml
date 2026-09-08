@@ -1,0 +1,231 @@
+openapi: 3.1.0
+info:
+  title: Campus Court Booking API
+  version: 0.2.0
+  description: |
+    Manages campus padel and tennis court reservations for students, staff, and campus security.
+    All money amounts are whole numbers in the smallest unit of the currency (e.g., IDR or cents). 
+    All timestamps are RFC 3339 with a timezone offset. Clients MUST ignore response fields 
+    they do not recognise, and MUST NOT crash when they see a status value they do not know.
+servers:
+  - url: http://127.0.0.1:4010
+    description: Local mock server
+  - url: https://api.campus-court.example/v1
+    description: Production
+
+paths:
+  /courts:
+    get:
+      operationId: listCourts
+      summary: List all court facilities
+      description: |
+        Returns all courts. Unavailable or maintenance courts are returned with isAvailable false 
+        so clients can display them greyed out instead of hiding them.
+      parameters:
+        - name: isAvailable
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter courts by active availability.
+      responses:
+        '200':
+          description: List of court resources.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Court'
+        '400':
+          description: isAvailable was not a valid boolean.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /courts/{courtId}:
+    parameters:
+      - name: courtId
+        in: path
+        required: true
+        description: Opaque, server-generated. Never a database integer.
+        schema:
+          type: string
+          pattern: '^crt_[A-Za-z0-9]{4,}$'
+        example: crt_Padel01
+    get:
+      operationId: getCourt
+      summary: Fetch one court
+      description: |
+        Returns a single court facility by its identifier.
+      responses:
+        '200':
+          description: The court.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Court'
+        '400':
+          description: The courtId did not match the documented identifier pattern.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: No court exists with that identifier.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /bookings:
+    post:
+      operationId: createBooking
+      summary: Reserve a court slot
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: |
+            Created by the client when the user confirms the booking, and reused unchanged 
+            for every retry of that same intention. Kept for 24 hours. Reusing a key with a 
+            different body returns 409 idempotency-key-reuse.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewBooking'
+      responses:
+        '201':
+          description: Booking created or replayed original response.
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /v1/bookings/bkg_9A2xLp
+              description: URI of the created booking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          description: Well-formed request but semantically invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  schemas:
+    Court:
+      type: object
+      required: [id, name, courtType, isAvailable, hourlyRate, currency]
+      properties:
+        id:
+          type: string
+          pattern: '^crt_[A-Za-z0-9]{4,}$'
+          example: crt_Padel01
+        name:
+          type: string
+          example: Indoor Padel Court A
+        courtType:
+          type: string
+          example: padel
+        isAvailable:
+          type: boolean
+          description: False when under maintenance or reserved for varsity practice.
+          example: true
+        hourlyRate:
+          type: integer
+          description: Rate per hour in smallest currency unit.
+          example: 150000
+        currency:
+          type: string
+          example: IDR
+
+    Booking:
+      type: object
+      required: [id, courtId, reservedBy, slotStart, slotEnd, status, grandTotal, currency]
+      properties:
+        id:
+          type: string
+          pattern: '^bkg_[A-Za-z0-9]{4,}$'
+          example: bkg_9A2xLp
+        courtId:
+          type: string
+          example: crt_Padel01
+        reservedBy:
+          type: string
+          example: usr_akhtar88
+        slotStart:
+          type: string
+          format: date-time
+          example: '2026-09-10T14:00:00+07:00'
+        slotEnd:
+          type: string
+          format: date-time
+          example: '2026-09-10T16:00:00+07:00'
+        status:
+          type: string
+          enum: [pending, confirmed, checked_in, completed, cancelled, rejected]
+          description: Clients MUST treat an unknown status value as 'in progress' and MUST NOT crash.
+          example: confirmed
+        grandTotal:
+          type: integer
+          description: Total charged in smallest currency unit.
+          example: 300000
+        currency:
+          type: string
+          example: IDR
+
+    NewBooking:
+      type: object
+      required: [courtId, slotStart, slotEnd]
+      properties:
+        courtId:
+          type: string
+          example: crt_Padel01
+        slotStart:
+          type: string
+          format: date-time
+          example: '2026-09-10T14:00:00+07:00'
+        slotEnd:
+          type: string
+          format: date-time
+          example: '2026-09-10T16:00:00+07:00'
+
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          example: 'https://api.campus-court.example/problems/slot-unavailable'
+        title:
+          type: string
+          example: Court slot is already booked
+        status:
+          type: integer
+          example: 409
+        detail:
+          type: string
+          example: Court crt_Padel01 is already reserved between 14:00 and 16:00 on 2026-09-10.
+        instance:
+          type: string
+          example: /v1/bookings
+
+  responses:
+    Conflict:
+      description: The request was valid but rejected by domain rules.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'

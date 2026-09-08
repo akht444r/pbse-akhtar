@@ -5,6 +5,7 @@
   "main": "src/app.js",
   "type": "module",
   "scripts": {
+    "test:contract": "node --test tests/contract/contract.test.js",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js"
   },
