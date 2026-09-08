@@ -1,7 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import pg from 'pg';
 import { problem } from './problem.js';
+import { courtsRouter } from './routes/courts.js';
+import { bookingsRouter } from './routes/bookings.js';
 
 dotenv.config();
 
@@ -14,11 +15,6 @@ for (const k of requiredVars) {
   }
 }
 
-// PostgreSQL connection pool
-export const db = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-});
-
 const app = express();
 app.use(express.json());
 
@@ -26,6 +22,9 @@ app.use(express.json());
 app.get('/health', (req, res) => {
   return res.status(200).json({ status: 'ok' });
 });
+
+app.use('/v1/courts', courtsRouter);
+app.use('/v1/bookings', bookingsRouter);
 
 // Global fallback handler: logs details internally, returns safe RFC 9457 500
 app.use((err, req, res, next) => {

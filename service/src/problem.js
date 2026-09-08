@@ -2,6 +2,7 @@ const TITLES = {
   'invalid-request-body': 'Invalid Request Body',
   'invalid-identifier': 'Invalid Resource Identifier',
   'court-not-found': 'Court Not Found',
+  'unknown-court': 'Referenced Court Does Not Exist',
   'booking-not-found': 'Booking Not Found',
   'court-unavailable': 'Court Unavailable',
   'idempotency-key-reuse': 'Idempotency Key Reused With Different Body',

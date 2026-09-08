@@ -17,7 +17,8 @@ CREATE TABLE bookings (
     id TEXT PRIMARY KEY,
     court_id TEXT NOT NULL REFERENCES courts(id),
     user_id TEXT NOT NULL,
-    slot_time TIMESTAMPTZ NOT NULL,
+    slot_start TIMESTAMPTZ NOT NULL,
+    slot_end TIMESTAMPTZ NOT NULL,
     status TEXT NOT NULL DEFAULT 'confirmed',
     total_fee INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

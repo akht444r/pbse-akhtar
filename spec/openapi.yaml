@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Campus Court Booking API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Manages campus padel and tennis court reservations for students, staff, and campus security.
     All money amounts are whole numbers in the smallest unit of the currency (e.g., IDR or cents). 
@@ -37,6 +37,47 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Court'
+        '400':
+          description: isAvailable was not a valid boolean.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /courts/{courtId}:
+    parameters:
+      - name: courtId
+        in: path
+        required: true
+        description: Opaque, server-generated. Never a database integer.
+        schema:
+          type: string
+          pattern: '^crt_[A-Za-z0-9]{4,}$'
+        example: crt_Padel01
+    get:
+      operationId: getCourt
+      summary: Fetch one court
+      description: |
+        Returns a single court facility by its identifier.
+      responses:
+        '200':
+          description: The court.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Court'
+        '400':
+          description: The courtId did not match the documented identifier pattern.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: No court exists with that identifier.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
 
   /bookings:
     post:
