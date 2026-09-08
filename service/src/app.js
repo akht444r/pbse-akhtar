@@ -45,3 +45,9 @@ app.use((err, req, res, next) => {
     detail: 'An unexpected internal error occurred.',
   });
 });
+
+// Start the server so Schemathesis can connect on port 3000
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Service listening on port ${port}`);
+});
