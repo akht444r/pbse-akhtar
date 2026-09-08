@@ -1,32 +1,25 @@
-// schemas/court.js — validation rules, copied from the contract's
-// /courts GET parameters (spec/openapi.yaml)
-
-// The contract declares one optional query parameter: isAvailable (boolean).
-// No pagination is documented for this operation, so none is validated here.
 export function parseListCourtsQuery(query) {
-  const { isAvailable } = query;
+  const allowedKeys = ['isAvailable'];
+  const keys = Object.keys(query);
+  const hasExtra = keys.some((k) => !allowedKeys.includes(k));
 
-  if (isAvailable === undefined) {
-    return { success: true, data: {} };
+  if (hasExtra) {
+    return { success: false, error: 'Unknown query parameter.' };
   }
 
-  if (isAvailable !== 'true' && isAvailable !== 'false') {
-    return {
-      success: false,
-      error: 'isAvailable must be "true" or "false"',
-    };
+  if (query.isAvailable !== undefined) {
+    if (query.isAvailable !== 'true' && query.isAvailable !== 'false') {
+      return { success: false, error: 'isAvailable must be "true" or "false".' };
+    }
+    return { success: true, data: { isAvailable: query.isAvailable === 'true' } };
   }
 
-  return { success: true, data: { isAvailable: isAvailable === 'true' } };
+  return { success: true, data: {} };
 }
 
-// Matches the courtId pattern from the contract's path parameter for
-// /courts/{courtId}: crt_ followed by 4+ alphanumeric characters.
-const COURT_ID_PATTERN = /^crt_[A-Za-z0-9]{4,}$/;
-
-export function parseCourtId(courtId) {
-  if (!COURT_ID_PATTERN.test(courtId)) {
-    return { success: false, error: 'courtId must match ^crt_[A-Za-z0-9]{4,}$' };
+export function parseCourtId(id) {
+  if (!id || typeof id !== 'string' || id.trim() === '') {
+    return { success: false, error: 'courtId is required.' };
   }
-  return { success: true, data: courtId };
+  return { success: true, data: id.trim() };
 }

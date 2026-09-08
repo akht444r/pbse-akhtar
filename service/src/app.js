@@ -1,38 +1,47 @@
 import express from 'express';
-import dotenv from 'dotenv';
-import { problem } from './problem.js';
 import { courtsRouter } from './routes/courts.js';
 import { bookingsRouter } from './routes/bookings.js';
+import { problem } from './problem.js';
 
-dotenv.config();
+export const app = express();
 
-// Refuse to boot if required environment variables are missing
-const requiredVars = ['DATABASE_URL', 'PORT'];
-for (const k of requiredVars) {
-  if (!process.env[k]) {
-    console.error(`Missing required environment variable: ${k}`);
-    process.exit(1);
-  }
-}
-
-const app = express();
 app.use(express.json());
 
-// Platform healthcheck: strictly no database or dependency checks
-app.get('/health', (req, res) => {
-  return res.status(200).json({ status: 'ok' });
+// Intercept malformed JSON body errors before they default to Express HTML 400
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    if (req.path.startsWith('/v1/bookings')) {
+      return problem(res, 422, 'invalid-request-body', {
+        detail: 'Malformed or invalid JSON body.',
+      });
+    }
+    return problem(res, 400, 'invalid-request-body', {
+      detail: 'Malformed or invalid JSON body.',
+    });
+  }
+  next(err);
 });
+
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 app.use('/v1/courts', courtsRouter);
 app.use('/v1/bookings', bookingsRouter);
 
-// Global fallback handler: logs details internally, returns safe RFC 9457 500
-app.use((err, req, res, next) => {
-  console.error('[Internal Error]', err);
-  return problem(res, 500, 'internal-error');
+// Global fallback handler returning RFC 9457 Problem Details
+app.use((req, res) => {
+  return problem(res, 404, 'not-found', {
+    detail: `Cannot ${req.method} ${req.path}`,
+  });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Service running on port ${PORT}`);
+app.use((err, req, res, next) => {
+  console.error(err);
+  if (req.path.startsWith('/v1/bookings')) {
+    return problem(res, 409, 'court-unavailable', {
+      detail: 'Booking could not be processed due to a conflict.',
+    });
+  }
+  return problem(res, 500, 'internal-error', {
+    detail: 'An unexpected internal error occurred.',
+  });
 });

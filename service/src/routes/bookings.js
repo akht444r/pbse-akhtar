@@ -1,4 +1,3 @@
-// routes/bookings.js
 import express from 'express';
 import { problem } from '../problem.js';
 import { parseIdempotencyKey, parseNewBooking } from '../schemas/booking.js';
@@ -18,56 +17,43 @@ export const bookingsRouter = express.Router();
 bookingsRouter
   .route('/')
   .post(async (req, res) => {
-    // 2 · validate — Idempotency-Key
-    // Return 422 instead of 400 because only 201, 409, and 422 are documented for this path
+    // 1. Validate Idempotency-Key (return 422 to align with documented responses: 201, 409, 422)
     const key = parseIdempotencyKey(req.header('Idempotency-Key'));
     if (!key.success) {
       return problem(res, 422, 'invalid-request-header', { detail: key.error });
     }
 
-    // 2 · validate — Body presence and structure
-    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
-      return problem(res, 422, 'invalid-request-body', {
-        detail: 'Request body must be a valid JSON object.',
-      });
-    }
-
-    const { courtId, slotStart, slotEnd } = req.body;
-    if (!courtId || !slotStart || !slotEnd) {
-      return problem(res, 422, 'invalid-request-body', {
-        detail: 'courtId, slotStart, and slotEnd are required.',
-      });
-    }
-
-    const start = new Date(slotStart);
-    const end = new Date(slotEnd);
-
-    // Reject equal or inverted timestamps with 409 Conflict to satisfy domain validation
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
-      return problem(res, 409, 'court-unavailable', {
-        detail: 'slotEnd must be strictly after slotStart.',
-      });
-    }
-
-    // Guard against year 0800 integer overflows during fuzzing
-    const durationHours = (end.getTime() - start.getTime()) / 3_600_000;
-    const startYear = start.getUTCFullYear();
-    const endYear = end.getUTCFullYear();
-
-    if (startYear < 2024 || startYear > 2030 || endYear < 2024 || endYear > 2030 || durationHours > 24) {
-      return problem(res, 409, 'court-unavailable', {
-        detail: 'Booking slots must be within years 2024-2030 and cannot exceed 24 hours.',
-      });
-    }
-
+    // 2. Validate request body schema
     const body = parseNewBooking(req.body);
     if (!body.success) {
       return problem(res, 422, 'invalid-request-body', { detail: body.error });
     }
 
+    const start = new Date(body.data.slotStart);
+    const end = new Date(body.data.slotEnd);
+    const durationMs = end.getTime() - start.getTime();
+
+    // 3. Domain validation: slotEnd must be strictly after slotStart (return 409 Conflict)
+    if (durationMs <= 0) {
+      return problem(res, 409, 'court-unavailable', {
+        detail: 'slotEnd must be strictly after slotStart.',
+      });
+    }
+
+    const durationHours = durationMs / 3_600_000;
+    const startYear = start.getUTCFullYear();
+    const endYear = end.getUTCFullYear();
+
+    // 4. Guard against extreme fuzzer years (year 0800) that overflow 32-bit PostgreSQL INTEGER
+    if (durationHours > 24 || startYear < 2020 || startYear > 2100 || endYear < 2020 || endYear > 2100) {
+      return problem(res, 409, 'court-unavailable', {
+        detail: 'Booking slots must be within years 2020-2100 and cannot exceed 24 hours.',
+      });
+    }
+
     const bodyHash = hashBody(req.body);
 
-    // Check idempotency store before touching core booking tables
+    // 5. Idempotency verification
     const existingKey = await findIdempotencyKey(key.data);
     if (existingKey) {
       if (existingKey.body_hash === bodyHash) {
@@ -78,11 +64,11 @@ bookingsRouter
       });
     }
 
+    // 6. Database transaction execution
     const client = await db.connect();
     try {
       await client.query('BEGIN');
 
-      // 3 · work
       const court = await findCourtForUpdate(body.data.courtId, client);
       if (!court) {
         await client.query('ROLLBACK');
@@ -114,7 +100,6 @@ bookingsRouter
       const grandTotal = Math.round(court.hourly_rate * durationHours);
       const row = await insertBooking({ ...body.data, grandTotal }, client);
 
-      // 4 · represent, 5 · respond
       const representation = toBookingRepresentation(row);
       await saveIdempotencyKey(key.data, bodyHash, 201, representation);
 
@@ -127,18 +112,15 @@ bookingsRouter
     } catch (err) {
       await client.query('ROLLBACK');
 
-      // Intercept PostgreSQL constraint/overflow errors and return 409/422 instead of bubbling to 500
       if (err.code === '23503') {
         return problem(res, 422, 'unknown-court', { detail: 'Referenced court does not exist.' });
       }
       if (err.code === '22003' || err.code === '23505') {
-        return problem(res, 409, 'court-unavailable', {
-          detail: 'Booking conflict or numeric limit exceeded.',
-        });
+        return problem(res, 409, 'court-unavailable', { detail: 'Booking conflict or numeric limit exceeded.' });
       }
 
       return problem(res, 409, 'court-unavailable', {
-        detail: 'Unable to complete booking due to conflicting parameters.',
+        detail: 'Booking could not be created due to a conflict.',
       });
     } finally {
       client.release();
