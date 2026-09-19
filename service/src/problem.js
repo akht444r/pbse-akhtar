@@ -22,3 +22,20 @@ export function problem(res, status, slug, options = {}) {
       ...extensions
     });
 }
+
+export function unauthorized(res, error = 'invalid_token') {
+  res.set('WWW-Authenticate', `Bearer error="${error}"`);
+  return problem(res, 401, 'unauthenticated', {
+    detail: 'Authentication token is missing, invalid, or expired.',
+  });
+}
+
+export function forbidden(res, needed = []) {
+  res.set(
+    'WWW-Authenticate',
+    `Bearer error="insufficient_scope", scope="${needed.join(' ')}"`
+  );
+  return problem(res, 403, 'insufficient-scope', {
+    detail: `Operation requires scopes: ${needed.join(' ')}.`,
+  });
+}

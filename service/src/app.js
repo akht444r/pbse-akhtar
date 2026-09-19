@@ -2,6 +2,7 @@ import express from 'express';
 import { courtsRouter } from './routes/courts.js';
 import { bookingsRouter } from './routes/bookings.js';
 import { problem } from './problem.js';
+import { authenticate } from './auth/authenticate.js'; // 1. Added import
 
 export const app = express();
 
@@ -22,7 +23,11 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
+// Public health check (deliberately public without token)
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+// 2. Layer 1 Global Authenticator (populates req.principal for protected routes)
+app.use(authenticate);
 
 app.use('/v1/courts', courtsRouter);
 app.use('/v1/bookings', bookingsRouter);
