@@ -17,10 +17,10 @@ export const bookingsRouter = express.Router();
 bookingsRouter
   .route('/')
   .post(async (req, res) => {
-    // 1. Validate Idempotency-Key (return 422 to align with documented responses: 201, 409, 422)
+    // 1. Validate Idempotency-Key
     const key = parseIdempotencyKey(req.header('Idempotency-Key'));
     if (!key.success) {
-      return problem(res, 422, 'invalid-request-header', { detail: key.error });
+      return problem(res, 400, 'invalid-request-header', { detail: key.error });
     }
 
     // 2. Validate request body schema

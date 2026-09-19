@@ -1,3 +1,5 @@
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function parseListCourtsQuery(query) {
   const allowedKeys = ['isAvailable'];
   const keys = Object.keys(query);
@@ -18,8 +20,8 @@ export function parseListCourtsQuery(query) {
 }
 
 export function parseCourtId(id) {
-  if (!id || typeof id !== 'string' || id.trim() === '') {
-    return { success: false, error: 'courtId is required.' };
+  if (!id || typeof id !== 'string' || !UUID_REGEX.test(id.trim())) {
+    return { success: false, error: 'courtId must be a valid UUID.' };
   }
   return { success: true, data: id.trim() };
 }
