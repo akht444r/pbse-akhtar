@@ -35,9 +35,15 @@ courtsRouter
 
     const court = await findCourtById(id.data);
     if (!court) {
-      return problem(res, 404, 'court-not-found', {
-        detail: `No court with id ${id.data}.`,
-      });
+    	return problem(res, 404, 'court-not-found', {
+    		detail: `No court with id ${id.data}.`,
+  	});
+    }
+
+    if (req.principal?.facilityId !== court.facility_id) {
+  	return problem(res, 404, 'court-not-found', {
+    		detail: `No court with id ${id.data}.`,
+  	});
     }
 
     return res.status(200).json(toCourtRepresentation(court));

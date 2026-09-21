@@ -48,6 +48,7 @@ export async function teardownMockIdp() {
 export async function issueMockToken({
   subject = 'student-a',
   scopes = ['courts:read'],
+  facilityId = 'fac-main',
   issuer = 'https://auth.campus-court.local',
   audience = 'campus-court-api',
   expiresIn = '5m',
@@ -56,7 +57,10 @@ export async function issueMockToken({
     throw new Error('Run setupMockIdp() before issuing test tokens.');
   }
 
-  return new SignJWT({ scope: scopes.join(' ') })
+  return new SignJWT({
+    scope: scopes.join(' '),
+    facility_id: facilityId,
+  })
     .setProtectedHeader({ alg: 'RS256', kid: 'campus-court-test-key' })
     .setIssuer(issuer)
     .setAudience(audience)

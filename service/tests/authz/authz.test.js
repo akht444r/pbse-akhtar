@@ -141,4 +141,27 @@ describe('Session 4: Access Control & Authorization Suite', () => {
     const body = await res.json();
     assert.equal(body.status, 403);
   });
+
+  it('Test 4: user from another facility cannot read the court and gets 404', async () => {
+    const token = await issueMockToken({
+      subject: 'student-other-facility',
+      scopes: ['courts:read'],
+      facilityId: 'fac-other',
+    });
+
+    const res = await fetch(`${BASE_URL}/v1/courts/crt_Padel01`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(res.status, 404);
+    assert.match(
+      res.headers.get('content-type') || '',
+      /application\/problem\+json/
+    );
+
+    const body = await res.json();
+    assert.equal(body.status, 404);
+  });
 });
