@@ -115,4 +115,30 @@ describe('Session 4: Access Control & Authorization Suite', () => {
   // TRACK 3: Place Negative Tests 3 & 4 below
   // (e.g., Missing scope check -> 403 & facility mismatch -> 404)
   // ========================================================
+
+  it('Test 3: authenticated user without courts:read scope returns 403', async () => {
+    const token = await issueMockToken({
+      subject: 'student-a',
+      scopes: ['bookings:read'],
+    });
+
+    const res = await fetch(`${BASE_URL}/v1/courts`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(res.status, 403);
+    assert.match(
+      res.headers.get('content-type') || '',
+      /application\/problem\+json/
+    );
+    assert.match(
+      res.headers.get('www-authenticate') || '',
+      /insufficient_scope/
+    );
+
+    const body = await res.json();
+    assert.equal(body.status, 403);
+  });
 });
