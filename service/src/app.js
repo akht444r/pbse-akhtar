@@ -25,6 +25,7 @@ app.use((err, req, res, next) => {
 
 // Public health check (deliberately public without token)
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+app.get('/v1/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 // 2. Layer 1 Global Authenticator (populates req.principal for protected routes)
 app.use(authenticate);

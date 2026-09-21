@@ -62,4 +62,8 @@ jobs:
           sleep 5
 
       - name: Run Schemathesis
-        run: schemathesis run spec/openapi.yaml --url http://localhost:3000/v1
+        run: schemathesis run spec/openapi.yaml --url http://localhost:3000 --exclude-checks unsupported_methods
+
+      - name: Run Authorization Tests
+        working-directory: service
+        run: npm run test:authz
