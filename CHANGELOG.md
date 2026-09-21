@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.0 — 2026-09-20
+
+### Changed — BREAKING
+- All `/v1/**` operations now require an access token carrying the scope
+  stated on that operation. Requests without a token are answered `401`.
+  Reason: Session 3 deliberately had no authentication; user and booking
+  data must not be served without checking the caller.
+
+### Added
+- `components.securitySchemes.oauth2` with four scopes: `courts:read`,
+  `courts:manage`, `bookings:read`, `bookings:write`.
+- `401` and `403` responses on every protected operation.
+- `GET /bookings/{bookingId}` and `POST /bookings/{bookingId}/cancellation`
+  — required so object-level ownership (Session 4 Layer 3) has something
+  to protect. Both document that "does not exist" and "not yours" answer
+  identically with `404`.
+
 ## 0.2.0 — 2026-09-08
 
 ### Added

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Campus Court Booking API
-  version: 0.2.0
+  version: 1.0.0
   description: |
     Manages campus padel and tennis court reservations for students, staff, and campus security.
     All money amounts are whole numbers in the smallest unit of the currency (e.g., IDR or cents). 
@@ -13,11 +13,16 @@ servers:
   - url: https://api.campus-court.example/v1
     description: Production
 
+security:
+  - oauth2: [courts:read]
+
 paths:
   /courts:
     get:
       operationId: listCourts
       summary: List all court facilities
+      security:
+        - oauth2: [courts:read]
       description: |
         Returns all courts. Unavailable or maintenance courts are returned with isAvailable false 
         so clients can display them greyed out instead of hiding them.
@@ -43,6 +48,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /courts/{courtId}:
     parameters:
@@ -57,6 +66,8 @@ paths:
     get:
       operationId: getCourt
       summary: Fetch one court
+      security:
+        - oauth2: [courts:read]
       description: |
         Returns a single court facility by its identifier.
       responses:
@@ -72,17 +83,19 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
-          description: No court exists with that identifier.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/Problem'
+          $ref: '#/components/responses/NotFound'
 
   /bookings:
     post:
       operationId: createBooking
       summary: Reserve a court slot
+      security:
+        - oauth2: [bookings:write]
       parameters:
         - name: Idempotency-Key
           in: header
@@ -113,6 +126,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Booking'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
         '422':
@@ -122,7 +139,106 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /bookings/{bookingId}:
+    parameters:
+      - name: bookingId
+        in: path
+        required: true
+        description: Opaque, server-generated. Never a database integer.
+        schema:
+          type: string
+          pattern: '^bkg_[A-Za-z0-9]{4,}$'
+        example: bkg_9A2xLp
+    get:
+      operationId: getBooking
+      summary: Fetch one booking
+      security:
+        - oauth2: [bookings:read]
+      description: |
+        Returns a single booking. Only visible to the student who made it. A booking that
+        does not exist and a booking that exists but belongs to someone else are answered
+        identically, so identifiers cannot be enumerated.
+      responses:
+        '200':
+          description: The booking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          description: The bookingId did not match the documented identifier pattern.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /bookings/{bookingId}/cancellation:
+    parameters:
+      - name: bookingId
+        in: path
+        required: true
+        schema:
+          type: string
+        example: bkg_9A2xLp
+    post:
+      operationId: cancelBooking
+      summary: Cancel a booking
+      security:
+        - oauth2: [bookings:write]
+      description: |
+        Cancels a booking owned by the caller. As with getBooking, a booking that does not
+        exist and one that belongs to someone else are answered identically with 404.
+        Re-sending this when the booking is ALREADY cancelled returns 200 with the existing
+        record, not a new mutation.
+      responses:
+        '200':
+          description: Already cancelled, or newly cancelled. The current record is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The booking is in a status that cannot be cancelled (e.g. completed).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
 components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: |
+        Access tokens are issued by the campus-court authorisation server.
+        Public clients (web, mobile) use Authorization Code + PKCE with no
+        client secret. The scheduled batch job uses Client Credentials.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.campus-court.local/realms/campus-court/protocol/openid-connect/auth
+          tokenUrl: https://auth.campus-court.local/realms/campus-court/protocol/openid-connect/token
+          refreshUrl: https://auth.campus-court.local/realms/campus-court/protocol/openid-connect/token
+          scopes:
+            courts:read: Browse court facilities and their availability
+            courts:manage: Operational/maintenance actions on a court (staff only)
+            bookings:read: Read bookings visible to the caller
+            bookings:write: Place and cancel own bookings
+        clientCredentials:
+          tokenUrl: https://auth.campus-court.local/realms/campus-court/protocol/openid-connect/token
+          scopes:
+            courts:read: Browse court facilities and their availability
+
   schemas:
     Court:
       type: object
@@ -225,6 +341,34 @@ components:
   responses:
     Conflict:
       description: The request was valid but rejected by domain rules.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: The token is absent, unverifiable, or expired.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          example: 'Bearer error="invalid_token"'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: The token is valid but does not carry the scope this operation requires.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+          example: 'Bearer error="insufficient_scope", scope="bookings:write"'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: |
+        The object does not exist, or it exists and is not accessible to this caller.
+        Both conditions are answered identically so identifiers cannot be enumerated.
       content:
         application/problem+json:
           schema:

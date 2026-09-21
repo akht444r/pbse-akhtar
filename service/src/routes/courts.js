@@ -1,5 +1,6 @@
 import express from 'express';
 import { problem } from '../problem.js';
+import { requireScope } from '../auth/require-scope.js';
 import { parseListCourtsQuery, parseCourtId } from '../schemas/court.js';
 import { findCourts, findCourtById } from '../store/courts.js';
 import { toCourtRepresentation } from '../representations/court.js';
@@ -8,7 +9,7 @@ export const courtsRouter = express.Router();
 
 courtsRouter
   .route('/')
-  .get(async (req, res) => {
+  .get(requireScope('courts:read'), async (req, res) => {
     const query = parseListCourtsQuery(req.query);
     if (!query.success) {
       return problem(res, 400, 'invalid-query-parameter', { detail: query.error });
@@ -26,7 +27,7 @@ courtsRouter
 
 courtsRouter
   .route('/:courtId')
-  .get(async (req, res) => {
+  .get(requireScope('courts:read'), async (req, res) => {
     const id = parseCourtId(req.params.courtId);
     if (!id.success) {
       return problem(res, 400, 'invalid-identifier', { detail: id.error });

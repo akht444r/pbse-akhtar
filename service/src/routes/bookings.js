@@ -1,6 +1,8 @@
 import express from 'express';
 import { problem } from '../problem.js';
-import { parseIdempotencyKey, parseNewBooking } from '../schemas/booking.js';
+import { requireScope } from '../auth/require-scope.js';
+import { mayAccessBooking } from '../auth/ownership.js';
+import { parseIdempotencyKey, parseNewBooking, parseBookingId } from '../schemas/booking.js';
 import {
   hashBody,
   findIdempotencyKey,
@@ -8,6 +10,8 @@ import {
   findCourtForUpdate,
   findOverlappingBooking,
   insertBooking,
+  findBookingById,
+  cancelBooking,
 } from '../store/bookings.js';
 import { toBookingRepresentation } from '../representations/booking.js';
 import { db } from '../db.js';
@@ -16,7 +20,7 @@ export const bookingsRouter = express.Router();
 
 bookingsRouter
   .route('/')
-  .post(async (req, res) => {
+  .post(requireScope('bookings:write'), async (req, res) => {
     // 1. Validate Idempotency-Key
     const key = parseIdempotencyKey(req.header('Idempotency-Key'));
     if (!key.success) {
@@ -98,7 +102,14 @@ bookingsRouter
       }
 
       const grandTotal = Math.round(court.hourly_rate * durationHours);
-      const row = await insertBooking({ ...body.data, grandTotal }, client);
+      // reservedBy comes from the authenticated principal, never from the
+      // request body — otherwise any caller could book on someone else's
+      // behalf just by naming them. NewBooking's contract schema does not
+      // (and should not) declare this field for that reason.
+      const row = await insertBooking(
+        { ...body.data, reservedBy: req.principal.subject, grandTotal },
+        client
+      );
 
       const representation = toBookingRepresentation(row);
       await saveIdempotencyKey(key.data, bodyHash, 201, representation);
@@ -130,5 +141,90 @@ bookingsRouter
     res.set('Allow', 'POST');
     return problem(res, 405, 'method-not-allowed', {
       detail: `Method ${req.method} is not allowed on /bookings.`,
+    });
+  });
+
+// GET /bookings/:bookingId — Layer 3 object check. Absent and not-mine
+// answer identically: same status, same type, same body (Session 4 rule).
+bookingsRouter
+  .route('/:bookingId')
+  .get(requireScope('bookings:read'), async (req, res) => {
+    // 1. validate
+    const id = parseBookingId(req.params.bookingId);
+    if (!id.success) {
+      return problem(res, 400, 'invalid-identifier', { detail: id.error });
+    }
+
+    // 2. load the object
+    const booking = await findBookingById(id.data);
+
+    // 3. absent -> 404
+    if (!booking) {
+      return problem(res, 404, 'booking-not-found', {
+        detail: `No booking with id ${id.data}.`,
+      });
+    }
+
+    // 4. not yours -> the SAME 404 (identical status, type, and body shape)
+    if (!mayAccessBooking(req.principal, booking)) {
+      return problem(res, 404, 'booking-not-found', {
+        detail: `No booking with id ${id.data}.`,
+      });
+    }
+
+    // 5. represent
+    return res.status(200).json(toBookingRepresentation(booking));
+  })
+  .all((req, res) => {
+    res.set('Allow', 'GET');
+    return problem(res, 405, 'method-not-allowed', {
+      detail: `Method ${req.method} is not allowed on /bookings/:bookingId.`,
+    });
+  });
+
+// POST /bookings/:bookingId/cancellation — the transition is a sub-resource
+// (a noun), not a verb, per Rule 5. Same ownership pattern as GET above.
+bookingsRouter
+  .route('/:bookingId/cancellation')
+  .post(requireScope('bookings:write'), async (req, res) => {
+    // 1. validate
+    const id = parseBookingId(req.params.bookingId);
+    if (!id.success) {
+      return problem(res, 400, 'invalid-identifier', { detail: id.error });
+    }
+
+    // 2. load the object
+    const booking = await findBookingById(id.data);
+
+    // 3. absent -> 404
+    if (!booking) {
+      return problem(res, 404, 'booking-not-found', {
+        detail: `No booking with id ${id.data}.`,
+      });
+    }
+
+    // 4. not yours -> the SAME 404. Checked BEFORE any mutation, so the
+    // caller's intent-check and the actual change can never diverge.
+    if (!mayAccessBooking(req.principal, booking)) {
+      return problem(res, 404, 'booking-not-found', {
+        detail: `No booking with id ${id.data}.`,
+      });
+    }
+
+    const { row, illegalTransition } = await cancelBooking(booking);
+    if (illegalTransition) {
+      return problem(res, 409, 'illegal-transition', {
+        detail: `Booking ${booking.id} is ${booking.status}; cancellation is refused.`,
+      });
+    }
+
+    // 5. represent — 200 whether this call caused the cancellation or the
+    // booking was already cancelled by an earlier retry (Rule 5).
+    return res.status(200).json(toBookingRepresentation(row));
+  })
+  .all((req, res) => {
+    res.set('Allow', 'POST');
+    return problem(res, 405, 'method-not-allowed', {
+      detail: `Method ${req.method} is not allowed on /bookings/:bookingId/cancellation.`,
     });
   });

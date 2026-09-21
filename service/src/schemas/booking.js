@@ -38,3 +38,14 @@ export function parseNewBooking(body) {
     },
   };
 }
+
+// Matches the bookingId pattern declared in spec/openapi.yaml's path
+// parameter for /bookings/{bookingId}.
+const BOOKING_ID_PATTERN = /^bkg_[A-Za-z0-9]{4,}$/;
+
+export function parseBookingId(bookingId) {
+  if (typeof bookingId !== 'string' || !BOOKING_ID_PATTERN.test(bookingId)) {
+    return { success: false, error: 'bookingId must match ^bkg_[A-Za-z0-9]{4,}$' };
+  }
+  return { success: true, data: bookingId };
+}
