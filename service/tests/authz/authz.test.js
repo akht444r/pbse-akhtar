@@ -5,14 +5,26 @@ import { setupMockIdp, teardownMockIdp, issueMockToken } from '../helpers/tokens
 
 const BASE_URL = process.env.SERVICE_URL || 'http://localhost:3000';
 
+function generateSlot(hour = 10) {
+  const randomDays = Math.floor(Math.random() * 500) + 50;
+  const d = new Date(Date.now() + randomDays * 86400000);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(hour).padStart(2, '0');
+  const nextHh = String(hour + 1).padStart(2, '0');
+  return {
+    slotStart: `${yyyy}-${mm}-${dd}T${hh}:00:00+07:00`,
+    slotEnd: `${yyyy}-${mm}-${dd}T${nextHh}:00:00+07:00`,
+  };
+}
+
 describe('Session 4: Access Control & Authorization Suite', () => {
   before(async () => {
-    // Spin up the in-memory mock JWKS server on port 9999
     await setupMockIdp(9999);
   });
 
   after(async () => {
-    // Tear down mock server after tests finish
     await teardownMockIdp();
   });
 
@@ -36,11 +48,12 @@ describe('Session 4: Access Control & Authorization Suite', () => {
   });
 
   // ========================================================
-  // TRACK 2: Place Negative Tests 1 & 2 below
-  // (e.g., Object ID scoping / cross-tenant court checks -> identical 404)
+  // TRACK 2: Negative Tests 1 & 2
   // ========================================================
   it('Test 1: Student A reading Student B\'s booking returns 404', async () => {
     const tokenB = await issueMockToken({ subject: 'student-b', scopes: ['bookings:write'] });
+    const slot = generateSlot(14);
+
     const createRes = await fetch(`${BASE_URL}/v1/bookings`, {
       method: 'POST',
       headers: {
@@ -50,10 +63,10 @@ describe('Session 4: Access Control & Authorization Suite', () => {
       },
       body: JSON.stringify({
         courtId: 'crt_Padel01',
-        slotStart: '2027-01-10T14:00:00+07:00',
-        slotEnd: '2027-01-10T15:00:00+07:00',
+        ...slot,
       }),
     });
+    
     assert.equal(createRes.status, 201, 'setup: booking for student-b must be created');
     const booking = await createRes.json();
 
@@ -66,8 +79,6 @@ describe('Session 4: Access Control & Authorization Suite', () => {
     const body = await res.json();
     assert.equal(body.status, 404);
 
-    // The same 404 shape as a genuinely non-existent booking -- proves
-    // "not yours" cannot be told apart from "does not exist".
     const notFoundRes = await fetch(`${BASE_URL}/v1/bookings/bkg_doesnotexist`, {
       headers: { Authorization: `Bearer ${tokenA}` },
     });
@@ -79,6 +90,8 @@ describe('Session 4: Access Control & Authorization Suite', () => {
 
   it('Test 2: Student A cancelling Student B\'s booking returns 404 and changes nothing', async () => {
     const tokenB = await issueMockToken({ subject: 'student-b', scopes: ['bookings:write', 'bookings:read'] });
+    const slot = generateSlot(9);
+
     const createRes = await fetch(`${BASE_URL}/v1/bookings`, {
       method: 'POST',
       headers: {
@@ -88,10 +101,10 @@ describe('Session 4: Access Control & Authorization Suite', () => {
       },
       body: JSON.stringify({
         courtId: 'crt_Padel02',
-        slotStart: '2027-01-11T09:00:00+07:00',
-        slotEnd: '2027-01-11T10:00:00+07:00',
+        ...slot,
       }),
     });
+    
     assert.equal(createRes.status, 201, 'setup: booking for student-b must be created');
     const booking = await createRes.json();
 
@@ -103,7 +116,6 @@ describe('Session 4: Access Control & Authorization Suite', () => {
     assert.equal(res.status, 404);
     assert.match(res.headers.get('content-type') || '', /application\/problem\+json/);
 
-    // Prove nothing actually changed: student-b can still see it as confirmed.
     const checkRes = await fetch(`${BASE_URL}/v1/bookings/${booking.id}`, {
       headers: { Authorization: `Bearer ${tokenB}` },
     });
@@ -112,10 +124,8 @@ describe('Session 4: Access Control & Authorization Suite', () => {
   });
 
   // ========================================================
-  // TRACK 3: Place Negative Tests 3 & 4 below
-  // (e.g., Missing scope check -> 403 & facility mismatch -> 404)
+  // TRACK 3: Negative Tests 3 & 4
   // ========================================================
-
   it('Test 3: authenticated user without courts:read scope returns 403', async () => {
     const token = await issueMockToken({
       subject: 'student-a',

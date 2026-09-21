@@ -14,6 +14,7 @@ describe('API Contract Conformance Tests', () => {
     token = await issueMockToken({
       subject: 'student-a',
       scopes: ['courts:read', 'bookings:write'],
+      facilityId: 'fac-main',
     });
   });
 
@@ -56,7 +57,7 @@ describe('API Contract Conformance Tests', () => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ courtId: 'c0000000-0000-0000-0000-000000000001' }),
+      body: JSON.stringify({ courtId: 'crt_Padel01' }),
     });
     assert.equal(res.status, 400);
     assert.match(res.headers.get('content-type') || '', /application\/problem\+json/);
