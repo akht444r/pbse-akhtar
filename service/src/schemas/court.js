@@ -1,3 +1,5 @@
+const COURT_ID_REGEX = /^crt_[A-Za-z0-9]+$/;
+
 export function parseListCourtsQuery(query) {
   const allowedKeys = ['isAvailable'];
   const keys = Object.keys(query);
@@ -18,8 +20,8 @@ export function parseListCourtsQuery(query) {
 }
 
 export function parseCourtId(id) {
-  if (!id || typeof id !== 'string' || id.trim() === '') {
-    return { success: false, error: 'courtId is required.' };
+  if (!id || typeof id !== 'string' || !COURT_ID_REGEX.test(id.trim())) {
+    return { success: false, error: 'courtId must be a valid court ID.' };
   }
   return { success: true, data: id.trim() };
 }

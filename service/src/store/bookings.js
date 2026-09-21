@@ -59,3 +59,26 @@ export async function insertBooking(booking, client) {
   );
   return rows[0];
 }
+
+export async function findBookingById(id) {
+  const { rows } = await db.query('SELECT * FROM bookings WHERE id = $1', [id]);
+  return rows[0]; // undefined when no such booking
+}
+
+// Cancelling an already-cancelled booking is a no-op that returns the
+// current row rather than erroring — see routes/bookings.js.
+const CANCELLABLE_STATUSES = ['pending', 'confirmed', 'checked_in'];
+
+export async function cancelBooking(booking) {
+  if (booking.status === 'cancelled') {
+    return { row: booking, alreadyCancelled: true };
+  }
+  if (!CANCELLABLE_STATUSES.includes(booking.status)) {
+    return { row: booking, illegalTransition: true };
+  }
+  const { rows } = await db.query(
+    `UPDATE bookings SET status = 'cancelled' WHERE id = $1 RETURNING *`,
+    [booking.id]
+  );
+  return { row: rows[0], alreadyCancelled: false };
+}
