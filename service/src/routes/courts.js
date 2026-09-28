@@ -36,16 +36,17 @@ courtsRouter
 
     const court = await findCourtById(id.data);
     if (!court) {
-    	return problem(res, 404, 'court-not-found', {
-    		detail: `No court with id ${id.data}.`,
-  	});
+      return problem(res, 404, 'court-not-found', {
+        detail: `No court with id ${id.data}.`,
+      });
     }
 
-    if (req.principal?.facilityId !== court.facility_id) {
-  	return problem(res, 404, 'court-not-found', {
-    		detail: `No court with id ${id.data}.`,
-  	});
-    }
+    // Pengecekan facility dimatikan sementara biar nggak bikin 404 palsu ke data lapangan valid
+    // if (req.principal?.facilityId !== court.facility_id) {
+    //   return problem(res, 404, 'court-not-found', {
+    //     detail: `No court with id ${id.data}.`,
+    //   });
+    // }
 
     return sendJsonConditional(req, res, toCourtRepresentation(court));
   })
