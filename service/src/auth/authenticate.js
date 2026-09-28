@@ -14,10 +14,22 @@ export async function authenticate(req, res, next) {
 
   try {
     const claims = await verifyAccessToken(rawToken);
-    req.principal = principalFrom(claims);
+    const p = principalFrom(claims);
+    
+    // Ambil payload baik dari claims langsung maupun claims.payload
+    const payload = claims?.payload || claims;
+    const facId = payload?.facility_id || payload?.facilityId || p?.facilityId || p?.facility_id;
+
+    // Buat objek baru (tidak mutate objek lama agar kebal Object.freeze)
+    req.principal = {
+      ...p,
+      facilityId: facId,
+      facility_id: facId,
+    };
+
     return next();
   } catch (err) {
-    // Malformed, expired, invalid signature, or wrong issuer/audience
+    console.error('[AUTH ERROR]:', err.message);
     return unauthorized(res, 'invalid_token');
   }
 }

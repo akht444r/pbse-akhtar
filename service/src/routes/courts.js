@@ -41,12 +41,13 @@ courtsRouter
       });
     }
 
-    // Pengecekan facility dimatikan sementara biar nggak bikin 404 palsu ke data lapangan valid
-    // if (req.principal?.facilityId !== court.facility_id) {
-    //   return problem(res, 404, 'court-not-found', {
-    //     detail: `No court with id ${id.data}.`,
-    //   });
-    // }
+    // Tenant isolation: tolak jika fasilitas user berbeda dengan fasilitas lapangan
+    const userFacility = req.principal?.facilityId || req.principal?.facility_id;
+    if (userFacility !== court.facility_id) {
+      return problem(res, 404, 'court-not-found', {
+        detail: `No court with id ${id.data}.`,
+      });
+    }
 
     return sendJsonConditional(req, res, toCourtRepresentation(court));
   })
