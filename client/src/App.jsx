@@ -2,6 +2,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import CourtList from './pages/CourtList';
+import CourtDetail from './pages/CourtDetail';
 
 function Navbar() {
   const { session, signIn, signOut, personas } = useAuth();
@@ -97,9 +99,9 @@ export default function App() {
           <Navbar />
           <main className="max-w-6xl mx-auto px-4 py-8 flex-1 w-full">
             <Routes>
-              {/* Member 2 will connect the Court List & Detail pages here */}
-              <Route path="/" element={<div className="p-6 bg-white rounded-xl border">Court Catalogue Placeholder (Member 2)</div>} />
-              <Route path="/courts/:courtId" element={<div className="p-6 bg-white rounded-xl border">Court Detail Placeholder (Member 2)</div>} />
+              {/* Workflow 1: Explore facilities (Member 2) */}
+              <Route path="/" element={<CourtList />} />
+              <Route path="/courts/:courtId" element={<CourtDetail />} />
               
               {/* Member 3 will connect the Booking Form & Detail pages here */}
               <Route path="/courts/:courtId/book" element={<div className="p-6 bg-white rounded-xl border">Booking Form Placeholder (Member 3)</div>} />
