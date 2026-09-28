@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { generateKeyPair, exportJWK, SignJWT } from 'jose';
+import { generateKeyPair, exportJWK, importJWK, SignJWT } from 'jose';
 
 let mockServer;
 let testPrivateKey;
@@ -9,15 +9,23 @@ let testPublicKeyJwk;
  * Spins up a lightweight in-process JWKS endpoint on port 9999
  */
 export async function setupMockIdp(port = 9999) {
-  const keyPair = await generateKeyPair('RS256');
-  testPrivateKey = keyPair.privateKey;
-  
-  testPublicKeyJwk = {
-    ...(await exportJWK(keyPair.publicKey)),
-    kid: 'campus-court-test-key',
-    alg: 'RS256',
-    use: 'sig',
-  };
+  if (process.env.IDP_PRIVATE_JWK) {
+    // Stable key (dev-idp.js): tokens signed once stay valid across restarts and machines.
+    const jwk = JSON.parse(process.env.IDP_PRIVATE_JWK);
+    testPrivateKey = await importJWK(jwk, 'RS256');
+    const { d, p, q, dp, dq, qi, ...publicPart } = jwk; // never publish the private parts
+    testPublicKeyJwk = { ...publicPart, kid: 'campus-court-test-key', alg: 'RS256', use: 'sig' };
+  } else {
+    // Tests: a throwaway key that exists only inside the test process.
+    const keyPair = await generateKeyPair('RS256');
+    testPrivateKey = keyPair.privateKey;
+    testPublicKeyJwk = {
+      ...(await exportJWK(keyPair.publicKey)),
+      kid: 'campus-court-test-key',
+      alg: 'RS256',
+      use: 'sig',
+    };
+  }
 
   mockServer = createServer((req, res) => {
     if (req.url === '/jwks.json') {
@@ -30,6 +38,10 @@ export async function setupMockIdp(port = 9999) {
   });
 
   await new Promise((resolve) => mockServer.listen(port, resolve));
+}
+
+export function getPublicJwks() {
+  return { keys: [testPublicKeyJwk] };
 }
 
 /**

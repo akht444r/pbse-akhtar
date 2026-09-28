@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.2.0 — 2026-09-29
+
+### Added
+- `If-Match` request header and `412 Precondition Failed` on `POST /v1/bookings/{bookingId}/cancellation`
+  (optional header, so existing clients keep working). Reason: A.8 — two windows acting on the same
+  booking must not silently overwrite each other.
+- `ETag` response header on booking reads, on the `201` from `POST /v1/bookings`, and on the cancellation `200`.
+- `If-None-Match` and `304 Not Modified` on `GET /v1/courts` and `GET /v1/courts/{courtId}`, plus the
+  `isAvailable` filter and the `400` the service already returned for an invalid value. Reason: A.7 — polled
+  reads must be cheap when nothing changed.
+- `invalidFields` (a list of `{ name, reason }`) on `400` Problem Details for `POST /v1/bookings`.
+  Reason: A.6 — forms need the failing fields by name.
+
+### Changed
+- `POST /v1/bookings` now answers a malformed or incomplete body with `400`, not `422`
+  (`422` remains for "every field valid, but the court does not exist").
+- An unexpected failure is always `500`; it was previously reported as a `409` on booking routes.
+
+## 1.1.0 — 2026-09-28
+- Recorded late: the version was raised to 1.1.0 without an entry. See the git history of `spec/openapi.yaml`.
+
 ## 1.0.0 — 2026-09-21
 
 ### Changed — BREAKING

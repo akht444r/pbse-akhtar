@@ -21,6 +21,19 @@ function matches(ifNoneMatch, etag) {
   return ifNoneMatch.split(',').some((token) => bare(token) === bare(etag));
 }
 
+// The ETag a payload will carry, so a write can be checked against the same value a read handed out.
+export function etagOf(payload) {
+  return etagFor(JSON.stringify(payload));
+}
+
+// A.8: true when the caller sent If-Match and it no longer describes the current version.
+// (Weak comparison is deliberate: our validators are weak ETags.)
+export function ifMatchFails(req, currentEtag) {
+  const header = req.headers['if-match'];
+  if (!header || header.trim() === '*') return false;
+  return !matches(header, currentEtag);
+}
+
 export function sendJsonConditional(req, res, payload) {
   const body = JSON.stringify(payload);
   const etag = etagFor(body);

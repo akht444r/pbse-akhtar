@@ -41,11 +41,6 @@ app.use(express.json());
 // Intercept malformed JSON body errors before they default to Express HTML 400
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    if (req.path.startsWith('/v1/bookings')) {
-      return problem(res, 422, 'invalid-request-body', {
-        detail: 'Malformed or invalid JSON body.',
-      });
-    }
     return problem(res, 400, 'invalid-request-body', {
       detail: 'Malformed or invalid JSON body.',
     });
@@ -73,11 +68,6 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error(err);
-  if (req.path.startsWith('/v1/bookings')) {
-    return problem(res, 409, 'court-unavailable', {
-      detail: 'Booking could not be processed due to a conflict.',
-    });
-  }
   return problem(res, 500, 'internal-error', {
     detail: 'An unexpected internal error occurred.',
   });

@@ -7,26 +7,34 @@ export function parseIdempotencyKey(header) {
 
 export function parseNewBooking(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return { success: false, error: 'Request body must be a valid JSON object.' };
+    const reason = 'Request body must be a valid JSON object.';
+    return { success: false, error: reason, errors: [{ name: 'body', reason }] };
   }
 
   const { courtId, slotStart, slotEnd } = body;
+  const errors = [];
 
   if (!courtId || typeof courtId !== 'string') {
-    return { success: false, error: 'courtId is required and must be a string.' };
+    errors.push({ name: 'courtId', reason: 'Choose a court.' });
   }
+
+  let start;
+  let end;
   if (!slotStart || typeof slotStart !== 'string') {
-    return { success: false, error: 'slotStart is required and must be a string.' };
+    errors.push({ name: 'slotStart', reason: 'Pick a start time.' });
+  } else {
+    start = new Date(slotStart);
+    if (isNaN(start.getTime())) errors.push({ name: 'slotStart', reason: 'The start time is not a valid date and time.' });
   }
   if (!slotEnd || typeof slotEnd !== 'string') {
-    return { success: false, error: 'slotEnd is required and must be a string.' };
+    errors.push({ name: 'slotEnd', reason: 'Pick an end time.' });
+  } else {
+    end = new Date(slotEnd);
+    if (isNaN(end.getTime())) errors.push({ name: 'slotEnd', reason: 'The end time is not a valid date and time.' });
   }
 
-  const start = new Date(slotStart);
-  const end = new Date(slotEnd);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    return { success: false, error: 'slotStart and slotEnd must be valid ISO 8601 date-time strings.' };
+  if (errors.length > 0) {
+    return { success: false, error: errors[0].reason, errors };
   }
 
   return {

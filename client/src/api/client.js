@@ -3,8 +3,10 @@
 // A.2 item 4: Base URL taken strictly from environment
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-// A.7 item 2: ETag cache that outlives component re-renders
-const eTagCache = new Map();
+// A.7 item 2: ETag cache that outlives component re-renders.
+// It keeps the body next to its ETag, so a 304 (which has no body) can hand the
+// caller the copy that the service just confirmed is still current.
+const eTagCache = new Map(); // endpoint -> { etag, data }
 
 /**
  * Session persistence helper
@@ -48,7 +50,7 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
 
   // A.7 item 1: Attach If-None-Match for polled GET collections
   if (method === 'GET' && eTagCache.has(endpoint)) {
-    requestHeaders['If-None-Match'] = eTagCache.get(endpoint);
+    requestHeaders['If-None-Match'] = eTagCache.get(endpoint).etag;
   }
 
   const response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -59,17 +61,16 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
 
   // A.7 item 3: Treat 304 as a successful read, not a failure
   if (response.status === 304) {
-    return { notModified: true, etag: eTagCache.get(endpoint) };
+    const cached = eTagCache.get(endpoint);
+    return { notModified: true, etag: cached?.etag, data: cached?.data };
   }
 
-  // Store response ETag if emitted by the service
   const responseEtag = response.headers.get('ETag');
-  if (responseEtag) {
-    eTagCache.set(endpoint, responseEtag);
-  }
 
   if (response.ok) {
     const data = await response.json();
+    // Remember validator + body for successful reads only, never for error bodies.
+    if (method === 'GET' && responseEtag) eTagCache.set(endpoint, { etag: responseEtag, data });
     return { data, etag: responseEtag };
   }
 
@@ -112,10 +113,12 @@ export async function apiRequest(endpoint, { method = 'GET', body, headers = {},
 export const api = {
   getCourts: () => apiRequest('/v1/courts'),
   getCourtById: (courtId) => apiRequest(`/v1/courts/${courtId}`),
-  createBooking: (payload) =>
+  // A.6 item 3: the form creates ONE key per intent and passes the same key on every retry.
+  // The default keeps old callers working, but a retry with a default key is not protected.
+  createBooking: (payload, idempotencyKey = crypto.randomUUID()) =>
     apiRequest('/v1/bookings', {
       method: 'POST',
-      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      headers: { 'Idempotency-Key': idempotencyKey },
       body: payload,
     }),
   getBookingById: (bookingId) => apiRequest(`/v1/bookings/${bookingId}`),
