@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } from 're
 import { AuthProvider, useAuth } from './context/AuthContext';
 import CourtList from './pages/CourtList';
 import CourtDetail from './pages/CourtDetail';
+import BookingForm from './pages/BookingForm';
+import BookingDetail from './pages/BookingDetail';
 
 function Navbar() {
   const { session, signIn, signOut, personas } = useAuth();
@@ -103,9 +105,9 @@ export default function App() {
               <Route path="/" element={<CourtList />} />
               <Route path="/courts/:courtId" element={<CourtDetail />} />
               
-              {/* Member 3 will connect the Booking Form & Detail pages here */}
-              <Route path="/courts/:courtId/book" element={<div className="p-6 bg-white rounded-xl border">Booking Form Placeholder (Member 3)</div>} />
-              <Route path="/bookings/:bookingId" element={<div className="p-6 bg-white rounded-xl border">Booking Detail Placeholder (Member 3)</div>} />
+              {/* Workflows 2 & 3: reserve, view, and cancel a booking (Member 3) */}
+              <Route path="/courts/:courtId/book" element={<BookingForm />} />
+              <Route path="/bookings/:bookingId" element={<BookingDetail />} />
 
               <Route path="/login" element={<LoginPage />} />
               <Route path="*" element={<div className="p-12 text-center text-slate-400">404 - Screen Not Found</div>} />
