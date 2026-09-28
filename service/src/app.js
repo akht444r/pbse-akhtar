@@ -3,6 +3,7 @@ import { courtsRouter } from './routes/courts.js';
 import { bookingsRouter } from './routes/bookings.js';
 import { problem } from './problem.js';
 import { authenticate } from './auth/authenticate.js';
+import { idpRouter } from './idp.js';
 
 export const app = express();
 
@@ -56,6 +57,8 @@ app.use((err, req, res, next) => {
 // Public health check endpoints
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 app.get('/v1/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+app.use(idpRouter);
 
 // Layer 1 Global Authenticator
 app.use(authenticate);

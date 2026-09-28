@@ -6,7 +6,7 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL,
   logLevel: process.env.LOG_LEVEL || 'info',
   oidcIssuer: process.env.OIDC_ISSUER || 'https://auth.campus-court.local',
-  oidcJwksUri: process.env.OIDC_JWKS_URI || 'http://127.0.0.1:9999/jwks.json',
+  oidcJwksUri: process.env.OIDC_JWKS_URI || `http://127.0.0.1:${Number(process.env.PORT) || 3000}/jwks.json`,
   oidcAudience: process.env.OIDC_AUDIENCE || 'campus-court-api',
 };
 
