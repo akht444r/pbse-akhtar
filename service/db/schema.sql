@@ -9,6 +9,7 @@ CREATE TABLE courts (
     type TEXT NOT NULL,
     hourly_rate INTEGER NOT NULL,
     is_available BOOLEAN NOT NULL DEFAULT true,
+    facility_id TEXT NOT NULL DEFAULT 'fac-main',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
