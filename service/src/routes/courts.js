@@ -4,6 +4,7 @@ import { requireScope } from '../auth/require-scope.js';
 import { parseListCourtsQuery, parseCourtId } from '../schemas/court.js';
 import { findCourts, findCourtById } from '../store/courts.js';
 import { toCourtRepresentation } from '../representations/court.js';
+import { sendJsonConditional } from '../http/conditional.js';
 
 export const courtsRouter = express.Router();
 
@@ -16,7 +17,7 @@ courtsRouter
     }
 
     const rows = await findCourts(query.data);
-    return res.status(200).json(rows.map(toCourtRepresentation));
+    return sendJsonConditional(req, res, rows.map(toCourtRepresentation));
   })
   .all((req, res) => {
     res.set('Allow', 'GET');
@@ -46,7 +47,7 @@ courtsRouter
   	});
     }
 
-    return res.status(200).json(toCourtRepresentation(court));
+    return sendJsonConditional(req, res, toCourtRepresentation(court));
   })
   .all((req, res) => {
     res.set('Allow', 'GET');
