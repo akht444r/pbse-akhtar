@@ -24,7 +24,7 @@ export const PRESET_PERSONAS = {
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [session, setSessionState] = useState(() => getActiveSession() || PRESET_PERSONAS.studentA);
+  const [session, setSessionState] = useState(() => getActiveSession());
 
   const signIn = (personaKey) => {
     const selected = PRESET_PERSONAS[personaKey];

@@ -14,6 +14,7 @@ import {
   cancelBooking,
 } from '../store/bookings.js';
 import { toBookingRepresentation } from '../representations/booking.js';
+import { sendJsonConditional, etagOf, ifMatchFails } from '../http/conditional.js';
 import { db } from '../db.js';
 
 export const bookingsRouter = express.Router();
@@ -25,7 +26,13 @@ bookingsRouter
     if (!key.success) return problem(res, 400, 'invalid-request-header', { detail: key.error });
 
     const body = parseNewBooking(req.body);
-    if (!body.success) return problem(res, 422, 'invalid-request-body', { detail: body.error });
+    if (!body.success) {
+      // A.6: name every invalid field so the form can put each message under its input.
+      return problem(res, 400, 'invalid-request-body', {
+        detail: 'One or more fields are invalid.',
+        extensions: { invalidFields: body.errors },
+      });
+    }
 
     const start = new Date(body.data.slotStart);
     const end = new Date(body.data.slotEnd);
@@ -72,7 +79,7 @@ bookingsRouter
       }
 
       const grandTotal = Math.round(court.hourly_rate * durationHours);
-      const subject = req.principal?.subject || req.principal?.sub || 'student-b';
+      const subject = req.principal.subject;
       
       // Inject SEMUA variasi parameter biar store/bookings.js ga mungkin crash
       const payload = {
@@ -92,6 +99,7 @@ bookingsRouter
       await saveIdempotencyKey(key.data, bodyHash, 201, representation);
       await client.query('COMMIT');
 
+      res.set('ETag', etagOf(representation));
       return res.status(201).location(`/v1/bookings/${row.id}`).json(representation);
     } catch (err) {
       await client.query('ROLLBACK');
@@ -101,11 +109,9 @@ bookingsRouter
         return problem(res, 409, 'court-unavailable', { detail: 'Booking conflict or numeric limit exceeded.' });
       }
 
-      // Kalau meledak selain karena booking nabrak, kita telanjangi error aslinya ke Terminal 2!
-      return res.status(500).json({
-        status: 500,
-        detail: `CRASH DARI DATABASE: ${err.message} (Code: ${err.code})`
-      });
+      // Details go to the server log only; the caller gets a generic Problem Details body.
+      console.error(err);
+      return problem(res, 500, 'internal-error', { detail: 'An unexpected internal error occurred.' });
     } finally {
       client.release();
     }
@@ -134,7 +140,7 @@ bookingsRouter
       return problem(res, 404, 'booking-not-found', { detail: `No booking with id ${id.data}.` });
     }
 
-    return res.status(200).json(toBookingRepresentation(booking));
+    return sendJsonConditional(req, res, toBookingRepresentation(booking));
   })
   .all((req, res) => {
     res.set('Allow', 'GET');
@@ -160,12 +166,23 @@ bookingsRouter
       return problem(res, 404, 'booking-not-found', { detail: `No booking with id ${id.data}.` });
     }
 
+    // A.8: the caller states which version it saw. If someone else changed the booking
+    // since then, refuse before touching anything (this check comes first on purpose).
+    if (ifMatchFails(req, etagOf(toBookingRepresentation(booking)))) {
+      return problem(res, 412, 'precondition-failed', {
+        detail: 'This booking was changed by someone else after you opened it. Reload it to see the current version.',
+      });
+    }
+
     const { row, illegalTransition } = await cancelBooking(booking);
     if (illegalTransition) {
       return problem(res, 409, 'illegal-transition', { detail: `Cancellation refused.` });
     }
 
-    return res.status(200).json(toBookingRepresentation(row));
+    const representation = toBookingRepresentation(row);
+    res.set('ETag', etagOf(representation));
+    res.set('Cache-Control', 'private, no-cache');
+    return res.status(200).json(representation);
   })
   .all((req, res) => {
     res.set('Allow', 'POST');

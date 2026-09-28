@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Court & Booking Service API
   description: Backend service for court scheduling and booking authorization.
-  version: 1.1.0
+  version: 1.2.0
 
 servers:
   - url: http://localhost:3000
@@ -41,15 +41,30 @@ paths:
       security:
         - oauth2:
             - courts:read
+      parameters:
+        - name: isAvailable
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter to available or unavailable courts only.
+        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: Array of court representations
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Court'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -71,13 +86,19 @@ paths:
             type: string
             pattern: '^crt_[A-Za-z0-9]+$'
             example: crt_Padel01
+        - $ref: '#/components/parameters/IfNoneMatch'
       responses:
         '200':
           description: Court details
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Court'
+        '304':
+          $ref: '#/components/responses/NotModified'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -116,6 +137,8 @@ paths:
               schema:
                 type: string
                 example: /v1/bookings/bkg_9f83a21b
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -158,6 +181,9 @@ paths:
       responses:
         '200':
           description: Booking representation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -186,9 +212,13 @@ paths:
           schema:
             type: string
             pattern: '^bkg_[A-Za-z0-9]+$'
+        - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
           description: Booking cancelled representation
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
@@ -207,6 +237,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
 
 components:
   securitySchemes:
@@ -233,7 +265,43 @@ components:
           scopes:
             reports:read: Read reconciliation and metric reports
 
+  parameters:
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: The ETag the client last received. If nothing changed the service answers 304 with no body.
+      schema:
+        type: string
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: >
+        The ETag of the version the client last saw. If someone else changed the entity since,
+        the write is refused with 412 and nothing is modified.
+      schema:
+        type: string
+
+  headers:
+    ETag:
+      description: Opaque version marker of this representation.
+      schema:
+        type: string
+
   responses:
+    NotModified:
+      description: Nothing changed since the version named in If-None-Match. No body.
+
+    PreconditionFailed:
+      description: >
+        The entity changed after the version named in If-Match. Somebody else wrote first.
+        Nothing was modified; the client should reload and explain this in domain terms.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
     Unauthorized:
       description: Token is missing, expired, or invalid.
       headers:
@@ -288,6 +356,19 @@ components:
           type: string
         instance:
           type: string
+        invalidFields:
+          type: array
+          description: Present on 400 validation failures. Names every invalid field, so a form can place each message on its input.
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              reason:
+                type: string
+            required:
+              - name
+              - reason
       required:
         - type
         - title

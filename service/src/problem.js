@@ -6,7 +6,15 @@ const TITLES = {
   'booking-not-found': 'Booking Not Found',
   'court-unavailable': 'Court Unavailable',
   'idempotency-key-reuse': 'Idempotency Key Reused With Different Body',
-  'internal-error': 'Internal Server Error'
+  'internal-error': 'Internal Server Error',
+  'invalid-request-header': 'Invalid Request Header',
+  'invalid-query-parameter': 'Invalid Query Parameter',
+  'method-not-allowed': 'Method Not Allowed',
+  'not-found': 'Not Found',
+  'unauthenticated': 'Authentication Required',
+  'insufficient-scope': 'Insufficient Scope',
+  'illegal-transition': 'Status Change Not Permitted',
+  'precondition-failed': 'Precondition Failed'
 };
 
 export function problem(res, status, slug, options = {}) {
