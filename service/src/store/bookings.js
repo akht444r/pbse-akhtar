@@ -1,0 +1,91 @@
+// store/bookings.js — the only place SQL for these resources is written
+import crypto from 'node:crypto';
+import { db } from '../db.js';
+
+// Deterministic hash of a request body, used to detect whether a retried
+// Idempotency-Key is being reused with the same or a different body.
+export function hashBody(body) {
+  const canonical = JSON.stringify(body, Object.keys(body).sort());
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+export async function findIdempotencyKey(key) {
+  const { rows } = await db.query(
+    'SELECT * FROM idempotency_keys WHERE key = $1',
+    [key]
+  );
+  return rows[0]; // undefined when never seen before
+}
+
+export async function saveIdempotencyKey(key, bodyHash, statusCode, responseBody) {
+  await db.query(
+    `INSERT INTO idempotency_keys (key, body_hash, status_code, response_body)
+     VALUES ($1, $2, $3, $4)`,
+    [key, bodyHash, statusCode, responseBody]
+  );
+}
+
+export async function findCourtForUpdate(courtId, client) {
+  const { rows } = await client.query(
+    'SELECT * FROM courts WHERE id = $1',
+    [courtId]
+  );
+  return rows[0];
+}
+
+// Interval-overlap test: an existing booking conflicts if it starts
+// before the new slot ends AND ends after the new slot starts, and it
+// hasn't been cancelled or rejected.
+export async function findOverlappingBooking(courtId, slotStart, slotEnd, client) {
+  const { rows } = await client.query(
+    `SELECT 1 FROM bookings
+     WHERE court_id = $1
+       AND status NOT IN ('cancelled', 'rejected')
+       AND slot_start < $3
+       AND slot_end > $2
+     LIMIT 1`,
+    [courtId, slotStart, slotEnd]
+  );
+  return rows.length > 0;
+}
+
+export async function insertBooking(booking, client) {
+  const id = 'bkg_' + crypto.randomBytes(6).toString('hex');
+  const slotStart = booking.slotStart || booking.slot_start;
+  const slotEnd = booking.slotEnd || booking.slot_end;
+  const slotTime = booking.slotTime || booking.slot_time || slotStart;
+  const courtId = booking.courtId || booking.court_id;
+  const userId = booking.reservedBy || booking.reserved_by || booking.user_id;
+  const totalFee = booking.grandTotal ?? booking.grand_total ?? booking.total_fee;
+
+  const { rows } = await client.query(
+    `INSERT INTO bookings (id, court_id, user_id, slot_time, slot_start, slot_end, status, total_fee)
+     VALUES ($1, $2, $3, $4, $5, $6, 'confirmed', $7)
+     RETURNING *`,
+    [id, courtId, userId, slotTime, slotStart, slotEnd, totalFee]
+  );
+  return rows[0];
+}
+
+export async function findBookingById(id) {
+  const { rows } = await db.query('SELECT * FROM bookings WHERE id = $1', [id]);
+  return rows[0]; // undefined when no such booking
+}
+
+// Cancelling an already-cancelled booking is a no-op that returns the
+// current row rather than erroring — see routes/bookings.js.
+const CANCELLABLE_STATUSES = ['pending', 'confirmed', 'checked_in'];
+
+export async function cancelBooking(booking) {
+  if (booking.status === 'cancelled') {
+    return { row: booking, alreadyCancelled: true };
+  }
+  if (!CANCELLABLE_STATUSES.includes(booking.status)) {
+    return { row: booking, illegalTransition: true };
+  }
+  const { rows } = await db.query(
+    `UPDATE bookings SET status = 'cancelled' WHERE id = $1 RETURNING *`,
+    [booking.id]
+  );
+  return { row: rows[0], alreadyCancelled: false };
+}

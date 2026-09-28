@@ -1,0 +1,381 @@
+openapi: 3.0.3
+info:
+  title: Court & Booking Service API
+  description: Backend service for court scheduling and booking authorization.
+  version: 1.1.0
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+security:
+  - oauth2:
+      - courts:read
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Public liveness check endpoint without authentication.
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required:
+                  - status
+
+  /v1/courts:
+    get:
+      summary: List courts
+      description: Retrieve courts available within the caller's tenant/facility.
+      operationId: listCourts
+      security:
+        - oauth2:
+            - courts:read
+      responses:
+        '200':
+          description: Array of court representations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Court'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/courts/{courtId}:
+    get:
+      summary: Get court by ID
+      description: Retrieve a specific court. If from another facility or non-existent, returns 404.
+      operationId: getCourtById
+      security:
+        - oauth2:
+            - courts:read
+      parameters:
+        - name: courtId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^crt_[A-Za-z0-9]+$'
+            example: crt_Padel01
+      responses:
+        '200':
+          description: Court details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Court'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/bookings:
+    post:
+      summary: Create a booking
+      description: Create a reservation. Principal identity is resolved from token subject.
+      operationId: createBooking
+      security:
+        - oauth2:
+            - bookings:write
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewBooking'
+      responses:
+        '201':
+          description: Booking created successfully
+          headers:
+            Location:
+              schema:
+                type: string
+                example: /v1/bookings/bkg_9f83a21b
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Booking conflict, schedule overlap, or idempotency mismatch
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Validation error or unknown referenced court
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /v1/bookings/{bookingId}:
+    get:
+      summary: Get booking by ID
+      description: Retrieve booking. Absent and foreign bookings yield identical 404 responses.
+      operationId: getBookingById
+      security:
+        - oauth2:
+            - bookings:read
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^bkg_[A-Za-z0-9]+$'
+            example: bkg_9f83a21b
+      responses:
+        '200':
+          description: Booking representation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/bookings/{bookingId}/cancellation:
+    post:
+      summary: Cancel a booking
+      description: Transition booking state to cancelled. Ownership verified before mutation.
+      operationId: cancelBooking
+      security:
+        - oauth2:
+            - bookings:write
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^bkg_[A-Za-z0-9]+$'
+      responses:
+        '200':
+          description: Booking cancelled representation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Illegal status transition
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      description: >
+        Access tokens issued by OIDC Authorisation Server.
+        Public clients authenticate via Authorization Code + PKCE (no secret).
+        Batch jobs use Client Credentials.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.pbse.example/realms/padel/protocol/openid-connect/auth
+          tokenUrl: https://auth.pbse.example/realms/padel/protocol/openid-connect/token
+          refreshUrl: https://auth.pbse.example/realms/padel/protocol/openid-connect/token
+          scopes:
+            courts:read: Browse courts and inspect availability
+            courts:write: Manage and modify court configurations
+            bookings:read: Read booking records accessible to the principal
+            bookings:write: Create bookings and cancel own reservations
+            bookings:manage: Staff management of facility bookings
+            reports:read: Read reconciliation and metric reports
+        clientCredentials:
+          tokenUrl: https://auth.pbse.example/realms/padel/protocol/openid-connect/token
+          scopes:
+            reports:read: Read reconciliation and metric reports
+
+  responses:
+    Unauthorized:
+      description: Token is missing, expired, or invalid.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          example: 'Bearer error="invalid_token"'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    Forbidden:
+      description: Valid token lacks required scope.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          example: 'Bearer error="insufficient_scope", scope="bookings:write"'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    NotFound:
+      description: >
+        Object does not exist or does not belong to the principal.
+        Both conditions are answered identically to prevent identifier enumeration.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    BadRequest:
+      description: Invalid identifier or malformed request syntax.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+      required:
+        - type
+        - title
+        - status
+
+    Court:
+      type: object
+      properties:
+        id:
+          type: string
+          example: crt_Padel01
+        name:
+          type: string
+          example: Court A (Indoor)
+        type:
+          type: string
+          example: indoor
+        hourlyRate:
+          type: integer
+          example: 150000
+        isAvailable:
+          type: boolean
+          example: true
+        facilityId:
+          type: string
+          example: fac-main
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - type
+        - hourlyRate
+        - isAvailable
+
+    NewBooking:
+      type: object
+      properties:
+        courtId:
+          type: string
+          example: crt_Padel01
+        slotStart:
+          type: string
+          format: date-time
+          example: '2026-10-15T14:00:00+07:00'
+        slotEnd:
+          type: string
+          format: date-time
+          example: '2026-10-15T15:00:00+07:00'
+      required:
+        - courtId
+        - slotStart
+        - slotEnd
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+          example: bkg_9f83a21b
+        courtId:
+          type: string
+          example: crt_Padel01
+        reservedBy:
+          type: string
+          example: student-b
+        slotStart:
+          type: string
+          format: date-time
+        slotEnd:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [confirmed, cancelled, pending]
+          example: confirmed
+        grandTotal:
+          type: integer
+          example: 150000
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - courtId
+        - reservedBy
+        - slotStart
+        - slotEnd
+        - status
+        - grandTotal
