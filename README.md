@@ -60,8 +60,8 @@ The browser client is built as an untrusted consumer standing strictly on the Se
 
 | Workflow | Screen & Route | Role Permitted | Operation in `openapi.yaml` |
 | --- | --- | --- | --- |
-| **1. Explore Facilities** | Court Catalogue (`/`) | anonymous, student | `GET /v1/courts` |
-|  | Court Detail (`/courts/:courtId`) | anonymous, student | `GET /v1/courts/{courtId}` |
+| **1. Explore Facilities** | Court Catalogue (`/`) | student (`courts:read`) | `GET /v1/courts` (1 call per screen, polled) |
+|  | Court Detail (`/courts/:courtId`) | student (`courts:read`) | `GET /v1/courts/{courtId}` (1 call per screen, polled) |
 | **2. Reserve Court Slot** | Booking Form (`/courts/:courtId/book`) | student (`bookings:write`) | `POST /v1/bookings` |
 |  | Booking Confirmation (`/bookings/:bookingId`) | student (`bookings:read`) | `GET /v1/bookings/{bookingId}` |
 | **3. Manage & Cancel** | Booking Detail (`/bookings/:bookingId`) | student (`bookings:write`) | `POST /v1/bookings/{bookingId}/cancellation` |
@@ -156,7 +156,7 @@ To run the full stack locally for presentation:
 
 | # | Grader Action | System & Client Behaviour |
 | --- | --- | --- |
-| 1 | Open URL without signing in | Public catalog loads; navigating to a protected route redirects to `/login` with `returnTo` preserved. |
+| 1 | Open URL without signing in | The catalogue's first request is answered 401 (it needs `courts:read`), so the app sends the visitor to `/login` with `returnTo` preserved and returns them to the catalogue after sign-in. |
 | 2 | Sign in as Student A & complete workflow | Complete end-to-end court reservation with skeleton loading; state persists after browser reload. |
 | 3 | Deep-link / open URL in new tab mid-workflow | Exact view loads with identical entity data using route parameters rather than returning to start. |
 | 4 | Submit form with missing/invalid inputs | Client catches 400/422 and renders RFC 9457 field-level error messages directly under the input. |
